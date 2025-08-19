@@ -697,8 +697,14 @@ def load_checkpoint_if_available(
         "best_train_loss",
         "best_valid_loss",
     ]
+    # for k in keys:
+    #     params[k] = saved_params[k]
+
     for k in keys:
-        params[k] = saved_params[k]
+        if k in saved_params:
+            params[k] = saved_params[k]
+        else:
+            logging.warning(f"Key '{k}' not found in checkpoint. Using default value.")
 
     if params.start_batch > 0:
         if "cur_epoch" in saved_params:
@@ -842,10 +848,10 @@ def compute_validation_loss(
             batch=batch,
             is_training=False,
         )
-        layer_outputs1 = middle_layer_outputs[_to_int_tuple(params.distillation_layer)[0]]
-        layer_outputs2 = middle_layer_outputs[_to_int_tuple(params.distillation_layer)[1]]
-        sharpness1 = torch.logsumexp(layer_outputs1.reshape(-1), dim=0)
-        sharpness2 = torch.logsumexp(layer_outputs2.reshape(-1), dim=0)
+        # layer_outputs1 = middle_layer_outputs[_to_int_tuple(params.distillation_layer)[0]]
+        # layer_outputs2 = middle_layer_outputs[_to_int_tuple(params.distillation_layer)[1]]
+        # sharpness1 = torch.logsumexp(layer_outputs1.reshape(-1), dim=0)
+        # sharpness2 = torch.logsumexp(layer_outputs2.reshape(-1), dim=0)
         # maxvalue1 = torch.max(layer_outputs1.reshape(-1))
         # maxvalue2 = torch.max(layer_outputs2.reshape(-1))
         print(f"simple_loss : {simple_loss}  pruned_loss : {pruned_loss}")
@@ -860,11 +866,11 @@ def compute_validation_loss(
             "pruned_loss": pruned_loss,
             "loss_per_batch": simple_loss * 0.5  +  pruned_loss,
             "loss_per_batch_per_frame": (simple_loss * 0.5  +  pruned_loss) * 100 / torch.sum(batch["supervisions"]["num_frames"]),
-            "distillation_layers_sharpness": [sharpness1.item(), sharpness2.item()],
+            # "distillation_layers_sharpness": [sharpness1.item(), sharpness2.item()],
             # "distillation_layers_maxvalue": [maxvalue1.item(), maxvalue2.item()],
         })
         print(f"batch {batch_idx} loss_per_batch_per_frame : ", (simple_loss * 0.5  +  pruned_loss) * 100 / torch.sum(batch["supervisions"]["num_frames"]))
-        print(f"batch {batch_idx} distillation_layers_sharpness : ", [sharpness1.item(), sharpness2.item()])
+        # print(f"batch {batch_idx} distillation_layers_sharpness : ", [sharpness1.item(), sharpness2.item()])
         # if batch_idx >=2:
         #     break
 

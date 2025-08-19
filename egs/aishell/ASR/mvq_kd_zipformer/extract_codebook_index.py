@@ -46,9 +46,6 @@ if model_type == "zipformer_m_55":
 from vq_utils import CodebookIndexExtractor
 from icefall.utils import AttributeDict, str2bool
 
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 指定使用第0号GPU
-
 def get_world_size():
     warn_message = (
         "It's better to use GPU to extrac codebook indices"

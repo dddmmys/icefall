@@ -13,7 +13,7 @@ def write_logs_to_gz(filename, logs):
                 "pruned_loss": log["pruned_loss"].item() if isinstance(log["pruned_loss"], torch.Tensor) else log["pruned_loss"],
                 "loss_per_batch": log["loss_per_batch"].item() if isinstance(log["loss_per_batch"], torch.Tensor) else log["loss_per_batch"],
                 "loss_per_batch_per_frame": log["loss_per_batch_per_frame"].item() if isinstance(log["loss_per_batch_per_frame"], torch.Tensor) else log["loss_per_batch_per_frame"],
-                "distillation_layers_sharpness": log[ "distillation_layers_sharpness"],
+                # "distillation_layers_sharpness": log[ "distillation_layers_sharpness"],
             }
             f.write(json.dumps(log_dict) + '\n')
 
