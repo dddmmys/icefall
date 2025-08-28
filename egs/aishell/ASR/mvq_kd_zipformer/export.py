@@ -42,16 +42,16 @@ you can do:
         --max-duration 100 \
         --bpe-model data/lang_bpe_500/bpe.model
 """
-
 import argparse
 import logging
 from pathlib import Path
 
 import k2
 import torch
-from train import get_params, get_transducer_model
+import pathlib
+from train_xs_new import get_params, get_model, add_model_arguments
 
-from icefall.checkpoint import average_checkpoints, find_checkpoints, load_checkpoint
+from icefall.checkpoint import average_checkpoints, find_checkpoints, load_checkpoint, average_checkpoints_with_averaged_model
 from icefall.utils import num_tokens, str2bool
 
 
@@ -60,10 +60,13 @@ def get_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
+    add_model_arguments(parser)
+
     parser.add_argument(
         "--epoch",
         type=int,
-        default=28,
+        # default=28,
+        default=70,
         help="""It specifies the checkpoint to use for averaging.
         Note: Epoch counts from 1.
         You can specify --avg to use more checkpoints for model averaging.""",
@@ -82,7 +85,8 @@ def get_parser():
     parser.add_argument(
         "--avg",
         type=int,
-        default=15,
+        # default=15,
+        default=16,
         help="Number of checkpoints to average. Automatically select "
         "consecutive checkpoints before the checkpoint specified by "
         "'--epoch' and '--iter'",
@@ -91,7 +95,8 @@ def get_parser():
     parser.add_argument(
         "--exp-dir",
         type=str,
-        default="pruned_transducer_stateless6/exp",
+        # default="pruned_transducer_stateless6/exp",
+        default="./mvq_kd_zipformer/exp12/student/xs_full_dataset/confidence/early-stop-50",
         help="""It specifies the directory where all training related
         files, e.g., checkpoints, log, etc, are saved
         """,
@@ -100,7 +105,8 @@ def get_parser():
     parser.add_argument(
         "--tokens",
         type=str,
-        default="data/lang_bpe_500/tokens.txt",
+        # default="data/lang_bpe_500/tokens.txt",
+        default="./data/lang_char/tokens.txt",
         help="Path to the tokens.txt.",
     )
 
@@ -115,8 +121,23 @@ def get_parser():
     parser.add_argument(
         "--context-size",
         type=int,
-        default=2,
+        # default=2,
+        default=1,
         help="The context size in the decoder. 1 means bigram; 2 means tri-gram",
+    )
+
+    parser.add_argument(
+        "--enable-distillation",
+        type=str2bool,
+        default=False,
+        help="Whether to eanble distillation.",
+    )
+
+    parser.add_argument(
+        "--layers-weight-opt",
+        type=str,
+        default="uncertainty2",
+        help="option of dk layers, uncertainty and avg",
     )
 
     return parser
@@ -147,7 +168,7 @@ def main():
     logging.info(params)
 
     logging.info("About to create model")
-    model = get_transducer_model(params)
+    model = get_model(params)
 
     model.to(device)
 
@@ -170,14 +191,32 @@ def main():
     elif params.avg == 1:
         load_checkpoint(f"{params.exp_dir}/epoch-{params.epoch}.pt", model)
     else:
-        start = params.epoch - params.avg + 1
-        filenames = []
-        for i in range(start, params.epoch + 1):
-            if start >= 0:
-                filenames.append(f"{params.exp_dir}/epoch-{i}.pt")
-        logging.info(f"averaging {filenames}")
+        # start = params.epoch - params.avg + 1
+        # filenames = []
+        # for i in range(start, params.epoch + 1):
+        #     if start >= 0:
+        #         filenames.append(f"{params.exp_dir}/epoch-{i}.pt")
+        # logging.info(f"averaging {filenames}")
+        # model.to(device)
+        # # torch.serialization.add_safe_globals([pathlib.PosixPath])
+        # model.load_state_dict(average_checkpoints(filenames, device=device))
+        assert params.avg > 0, params.avg
+        start = params.epoch - params.avg
+        assert start >= 1, start
+        filename_start = f"{params.exp_dir}/epoch-{start}.pt"
+        filename_end = f"{params.exp_dir}/epoch-{params.epoch}.pt"
+        logging.info(
+            f"Calculating the averaged model over epoch range from "
+            f"{start} (excluded) to {params.epoch}"
+        )
         model.to(device)
-        model.load_state_dict(average_checkpoints(filenames, device=device))
+        model.load_state_dict(
+            average_checkpoints_with_averaged_model(
+                filename_start=filename_start,
+                filename_end=filename_end,
+                device=device,
+            )
+        )
 
     model.eval()
 
@@ -209,3 +248,4 @@ if __name__ == "__main__":
 
     logging.basicConfig(format=formatter, level=logging.INFO)
     main()
+
