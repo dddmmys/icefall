@@ -1,0 +1,22 @@
+compress rate analyze
+
+
+zipformer-s 192
+before quantizer embedding :  torch.Size([46, 322, 192])
+after quantizer codebook_indexes :  torch.Size([46, 322, 16])
+zipformer-m 192
+before quantizer embedding :  torch.Size([46, 322, 192])
+after quantizer codebook_indexes :  torch.Size([46, 322, 16])
+zipformer-l 192
+before quantizer embedding :  torch.Size([46, 322, 192])
+after quantizer codebook_indexes :  torch.Size([46, 322, 16])
+
+zipformer-s 256
+before quantizer embedding :  torch.Size([46, 161, 256])
+after quantizer codebook_indexes :  torch.Size([46, 161, 16])
+zipformer-m 512
+before quantizer embedding :  torch.Size([46, 161, 512])
+after quantizer codebook_indexes :  torch.Size([46, 161, 16])
+zipformer-l 768
+before quantizer embedding :  torch.Size([46, 161, 768])
+after quantizer codebook_indexes :  torch.Size([46, 161, 16])
