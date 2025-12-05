@@ -10,6 +10,7 @@ from .checkpoint import checkpoint # from current directory.. could not get rela
 # checkpointing to save memory.
 def joint_codebook_loss(predictor: Tensor,
                         codebook_indexes: Tensor,
+                        teacher_weights: List[float],
                         linear1_weight: Tensor,
                         linear1_bias: Optional[Tensor],
                         codebook_embedding_weight: Tensor,
@@ -39,6 +40,7 @@ def joint_codebook_loss(predictor: Tensor,
     """
     # single teacher
     if len(codebook_indexes.shape) == 3:
+        print("mvq: ci shape is ", codebook_indexes.shape)
         num_codebooks = codebook_indexes.shape[-1]
         predictor_channels = predictor.shape[-1]
         hidden_channels = linear1_weight.shape[0]
@@ -89,6 +91,117 @@ def joint_codebook_loss(predictor: Tensor,
         # print(f"logits_student shape :  {logits_student.shape}       targets_teacher shape :  {targets_teacher.shape}")
 
         return torch.nn.functional.cross_entropy(logits_student,targets_teacher,ignore_index=ignore_index,reduction=reduction)
+    # multiple teachers
+    if len(codebook_indexes.shape) == 4:
+        num_codebooks = codebook_indexes.shape[-1]
+        predictor_channels = predictor.shape[-1]
+        hidden_channels = linear1_weight.shape[0]
+        codebook_size = codebook_embedding_weight.shape[0] // (num_codebooks - 1)
+        codebook_indexes = codebook_indexes.to(torch.int64)
+        assert list(predictor.shape[:-1]) == list(codebook_indexes.shape[1:3])
+        predictor = predictor.reshape(-1, predictor.shape[-1])  # (N, predictor_channels)
+        logprobs = torch.matmul(predictor, # (N, predictor_channels)
+                                linear2b_weight.transpose(1, 2) # (num_codebooks, predictor_channels, codebook_size)
+                                ).transpose(0, 1) # (N, num_codebooks, codebook_size)
+        logprobs += linear2_bias
+        logits_student = logprobs.reshape(-1, codebook_size)
+        # teacher_weights = [0.5, 0.3, 0.2]    #示例
+        # teacher_weights = torch.tensor(teacher_weights).to(codebook_indexes.device)
+        teacher_weights = teacher_weights.to(codebook_indexes.device)
+        print(f"teacher_weights is  {teacher_weights}, lsmvq ci shape is {codebook_indexes.shape}")
+
+        soft_group = hard_labels_to_soft(codebook_indexes, weights=teacher_weights, temperature=1.0, epsilon=0.05)  # shape [46, 322, 16, 257]
+        targets_teacher = soft_group.reshape(-1, codebook_size + 1)
+        processed_targets, valid_mask = process_soft_targets(targets_teacher) # [236992,256], [236992]
+
+        return masked_cross_entropy(logits_student, processed_targets, valid_mask,reduction=reduction)
+
+
+
+def masked_cross_entropy(logits, processed_targets, mask, reduction='sum'):
+    """
+    Args:
+        logits: [N,256]
+        processed_targets: [N,256]
+        mask: [N] (True 表示有效样本)
+        reduction: 'mean'/'sum'/'none'
+    """
+    # 计算逐样本交叉熵
+    log_probs = F.log_softmax(logits, dim=1)                          # [N,256]
+    per_sample_loss = -(processed_targets * log_probs).sum(dim=1)     # [N]
+    # 应用掩码
+    masked_loss = per_sample_loss * mask.float()
+    # 聚合方式
+    if reduction == 'mean':
+        return masked_loss.sum() / mask.float().sum().clamp(min=1e-6)  # 
+    elif reduction == 'sum':
+        return masked_loss.sum()
+    else: # 'none'
+        return masked_loss
+
+def process_soft_targets(soft_targets):
+    """
+    Args:
+        soft_targets: shape [N, 257]
+        
+    Returns:
+        processed_targets: shape [N, 256]
+        mask: shape [N] (True 表示有效样本)
+    """
+    # 步骤1：生成忽略掩码（排除最大值为第257类的样本）
+    max_values, max_indices = torch.max(soft_targets, dim=1)          # 获取每行最大值及其索引
+    mask = (max_indices != (soft_targets.size(1) - 1))                # 当最大值不是最后一列时标记为有效 
+    # 步骤2：概率重分配
+    pad_class_probs = soft_targets[:, -1:]                            # 提取第257类概率 [N,1]
+    redistributed = pad_class_probs / 256                             # 平均分配到前256类
+    adjusted_probs = soft_targets[:, :-1] + redistributed             # 叠加到前256类
+    # 归一化（确保概率和为1）
+    adjusted_probs = adjusted_probs / adjusted_probs.sum(dim=1, keepdim=True)  # 
+    
+    return adjusted_probs, mask
+
+def hard_labels_to_soft(
+    hard_labels_group: torch.Tensor,  # shape [N_teachers, B, T, F]
+    num_classes: int = 257,  # 256正常类 + 1个填充类
+    weights: list = None,            
+    temperature: float = 1.0,        
+    epsilon: float = 0.0,
+    pad_value: int = -100
+) -> torch.Tensor:
+    """将多教师硬标签转为软标签（支持填充值处理）
+    
+    Args:
+        pad_value: 原始填充值（默认-100），将映射到num_classes-1位置
+        最终生成的第256维（索引256）为填充类
+    """
+    # 0. 填充值替换（核心修改点）
+    mapped_labels = torch.where(
+        hard_labels_group == pad_value,
+        torch.tensor(num_classes-1, device=hard_labels_group.device),
+        hard_labels_group
+    )
+    # 验证替换后的标签范围（确保所有值∈[0, num_classes-1]）
+    assert (mapped_labels >= 0).all() and (mapped_labels < num_classes).all(), \
+        f"标签越界！有效范围[0, {num_classes-1}]，检测到最小值{mapped_labels.min()}, 最大值{mapped_labels.max()}"
+    # 1. One-Hot编码（包含填充类）
+    one_hot = F.one_hot(mapped_labels, num_classes).float()  # [N, B, T, F, 257]
+    # 2. 融合教师预测
+    if weights is not None:
+        # weights = torch.tensor(weights).view(-1, 1, 1, 1, 1)
+        weights = weights.clone().detach().view(-1, 1, 1, 1, 1)
+        soft_labels = (one_hot * weights).sum(dim=0)  # 加权平均
+    else:
+        soft_labels = one_hot.mean(dim=0)             # 简单平均
+    # 3. 温度缩放
+    if temperature != 1.0:
+        logits = torch.log(soft_labels + 1e-8)
+        soft_labels = F.softmax(logits / temperature, dim=-1)
+    # 4. 标签平滑
+    if epsilon > 0:
+        uniform = torch.ones_like(soft_labels) / num_classes
+        soft_labels = (1 - epsilon) * soft_labels + epsilon * uniform
+    
+    return soft_labels  # shape [B, T, F, C]
 
 
 class JointCodebookLoss(nn.Module):
@@ -169,7 +282,7 @@ class JointCodebookLoss(nn.Module):
     def forward(self,
                 predictor: Tensor,
                 codebook_indexes: Tensor,
-                            ) -> Tuple[Tensor, Tensor]:
+                teacher_weights: List[float],) -> Tuple[Tensor, Tensor]:
         """
         Forward function.
 
@@ -189,7 +302,7 @@ class JointCodebookLoss(nn.Module):
            reduction == 'sum'.
         """
 
-        args = (predictor, codebook_indexes,
+        args = (predictor, codebook_indexes, teacher_weights,
                 self.linear1.weight, self.linear1.bias,
                 self.codebook_embedding.weight,
                 self.linear2_weight,
@@ -222,21 +335,21 @@ class AutomaticWeightedLoss(nn.Module):
         # loss_sum = 0
         weights = []
         new_losses = []
-        # if opt == "uncertainty":
-        #     print("uncertainty 1/sigma^2 * loss + log(1 + sigma^2)")
-        #     for i, loss in enumerate(losses):
-        #         # loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
-        #         loss = 1.0 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
-        #         weights.append(self.params[i])
-        #         new_losses.append(loss)
+        if opt == "uncertainty":
+            print("uncertainty 1/sigma^2 * loss + log(1 + sigma^2)")
+            for i, loss in enumerate(losses):
+                # loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
+                loss = 1.0 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
+                weights.append(self.params[i])
+                new_losses.append(loss)
 
-        # if opt == "uncertainty1":
-        #     print("uncertainty 1/sigma^2 * loss + log(sigma)")
-        #     for i, loss in enumerate(losses):
-        #         # loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
-        #         loss = 1.0 / (self.params[i] ** 2) * loss + torch.log(self.params[i])
-        #         weights.append(self.params[i])
-        #         new_losses.append(loss)
+        if opt == "uncertainty1":
+            print("uncertainty 1/sigma^2 * loss + log(sigma)")
+            for i, loss in enumerate(losses):
+                # loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
+                loss = 1.0 / (self.params[i] ** 2) * loss + torch.log(self.params[i])
+                weights.append(self.params[i])
+                new_losses.append(loss)
 
         if opt == "uncertainty2":
             # print("uncertainty 0.5/sigma^2 * loss + log(1 + sigma^2)")
