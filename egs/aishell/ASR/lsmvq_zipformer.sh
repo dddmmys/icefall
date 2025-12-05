@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
 # 参数部分  -----------------------------------------------------------------------------------------------------------------
-stage=3
-stop_stage=3
-export CUDA_VISIBLE_DEVICES=1
+stage=0
+stop_stage=0
+export CUDA_VISIBLE_DEVICES=0
 
 : ${embedding_layers:="1,7"}      # 若未定义则默认0 ~ 7
 : ${num_codebooks:="16,16"}     # 若未定义则默认2,4,8,16
@@ -57,59 +57,59 @@ if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
     --num-utts-extracted 360294 \
     --use-extracted-codebook $use_extracted_codebook
 
-  # export MODEL_TYPE="zipformer_m_55"
-  # teacher_model_id=zipformer_m_55
+  export MODEL_TYPE="zipformer_m_55"
+  teacher_model_id=zipformer_m_55
 
-  # ./QUAD/extract_codebook_index.py \
-  #   --kd-exp-dir $exp_dir \
-  #   --embedding-layer ${embedding_layer[0]} \
-  #   --num-utts 2000 \
-  #   --num-codebooks ${num_codebook[0]} \
-  #   --max-duration 300 \
-  #   --teacher-model-id $teacher_model_id \
-  #   --spec-aug-time-warp-factor -1 \
-  #   --embedding-dim 192 \
-  #   --num-utts-extracted 360294 \
-  #   --use-extracted-codebook $use_extracted_codebook
+  ./QUAD/extract_codebook_index.py \
+    --kd-exp-dir $exp_dir \
+    --embedding-layer ${embedding_layer[0]} \
+    --num-utts 2000 \
+    --num-codebooks ${num_codebook[0]} \
+    --max-duration 300 \
+    --teacher-model-id $teacher_model_id \
+    --spec-aug-time-warp-factor -1 \
+    --embedding-dim 192 \
+    --num-utts-extracted 360294 \
+    --use-extracted-codebook $use_extracted_codebook
 
-  # ./QUAD/extract_codebook_index.py \
-  #   --kd-exp-dir $exp_dir \
-  #   --embedding-layer ${embedding_layer[1]} \
-  #   --num-utts 2000 \
-  #   --num-codebooks ${num_codebook[1]} \
-  #   --max-duration 300 \
-  #   --teacher-model-id $teacher_model_id \
-  #   --spec-aug-time-warp-factor -1 \
-  #   --embedding-dim 512 \
-  #   --num-utts-extracted 360294 \
-  #   --use-extracted-codebook $use_extracted_codebook
+  ./QUAD/extract_codebook_index.py \
+    --kd-exp-dir $exp_dir \
+    --embedding-layer ${embedding_layer[1]} \
+    --num-utts 2000 \
+    --num-codebooks ${num_codebook[1]} \
+    --max-duration 300 \
+    --teacher-model-id $teacher_model_id \
+    --spec-aug-time-warp-factor -1 \
+    --embedding-dim 512 \
+    --num-utts-extracted 360294 \
+    --use-extracted-codebook $use_extracted_codebook
 
-  # export MODEL_TYPE="zipformer_s_55"
-  # teacher_model_id=zipformer_s_55
+  export MODEL_TYPE="zipformer_s_55"
+  teacher_model_id=zipformer_s_55
 
-  # ./QUAD/extract_codebook_index.py \
-  #   --kd-exp-dir $exp_dir \
-  #   --embedding-layer ${embedding_layer[0]} \
-  #   --num-utts 2000 \
-  #   --num-codebooks ${num_codebook[0]} \
-  #   --max-duration 300 \
-  #   --teacher-model-id $teacher_model_id \
-  #   --spec-aug-time-warp-factor -1 \
-  #   --embedding-dim 192 \
-  #   --num-utts-extracted 360294 \
-  #   --use-extracted-codebook $use_extracted_codebook
+  ./QUAD/extract_codebook_index.py \
+    --kd-exp-dir $exp_dir \
+    --embedding-layer ${embedding_layer[0]} \
+    --num-utts 2000 \
+    --num-codebooks ${num_codebook[0]} \
+    --max-duration 300 \
+    --teacher-model-id $teacher_model_id \
+    --spec-aug-time-warp-factor -1 \
+    --embedding-dim 192 \
+    --num-utts-extracted 360294 \
+    --use-extracted-codebook $use_extracted_codebook
 
-  # ./QUAD/extract_codebook_index.py \
-  #   --kd-exp-dir $exp_dir \
-  #   --embedding-layer ${embedding_layer[1]} \
-  #   --num-utts 2000 \
-  #   --num-codebooks ${num_codebook[1]} \
-  #   --max-duration 300 \
-  #   --teacher-model-id $teacher_model_id \
-  #   --spec-aug-time-warp-factor -1 \
-  #   --embedding-dim 256 \
-  #   --num-utts-extracted 360294 \
-  #   --use-extracted-codebook $use_extracted_codebook
+  ./QUAD/extract_codebook_index.py \
+    --kd-exp-dir $exp_dir \
+    --embedding-layer ${embedding_layer[1]} \
+    --num-utts 2000 \
+    --num-codebooks ${num_codebook[1]} \
+    --max-duration 300 \
+    --teacher-model-id $teacher_model_id \
+    --spec-aug-time-warp-factor -1 \
+    --embedding-dim 256 \
+    --num-utts-extracted 360294 \
+    --use-extracted-codebook $use_extracted_codebook
 
 fi
 
@@ -117,29 +117,29 @@ fi
 if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
     # part 1: combine single teacher layers CI        part 2: combine multiple teacher's CI
 
-  # teacher_model_id=zipformer_l_56
-  # use_mul_tea=False
+  teacher_model_id=zipformer_l_56
+  use_mul_tea=False
 
-  # ./QUAD/combine_jsonl.py \
-  #   --output-path $exp_dir \
-  #   --teacher-model-id $teacher_model_id \
-  #   --use-mul-tea $use_mul_tea
+  ./QUAD/combine_jsonl.py \
+    --output-path $exp_dir \
+    --teacher-model-id $teacher_model_id \
+    --use-mul-tea $use_mul_tea
 
-  # teacher_model_id=zipformer_m_55
-  # use_mul_tea=False
+  teacher_model_id=zipformer_m_55
+  use_mul_tea=False
 
-  # ./QUAD/combine_jsonl.py \
-  #   --output-path $exp_dir \
-  #   --teacher-model-id $teacher_model_id \
-  #   --use-mul-tea $use_mul_tea
+  ./QUAD/combine_jsonl.py \
+    --output-path $exp_dir \
+    --teacher-model-id $teacher_model_id \
+    --use-mul-tea $use_mul_tea
 
-  # teacher_model_id=zipformer_s_55
-  # use_mul_tea=False
+  teacher_model_id=zipformer_s_55
+  use_mul_tea=False
 
-  # ./QUAD/combine_jsonl.py \
-  #   --output-path $exp_dir \
-  #   --teacher-model-id $teacher_model_id \
-  #   --use-mul-tea $use_mul_tea
+  ./QUAD/combine_jsonl.py \
+    --output-path $exp_dir \
+    --teacher-model-id $teacher_model_id \
+    --use-mul-tea $use_mul_tea
 
   use_mul_tea=True
 
