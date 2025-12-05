@@ -289,7 +289,7 @@ def get_parser():
     parser.add_argument(
         "--exp-dir",
         type=str,
-        default="mvq_kd_zipformer/exp/student",
+        default="QUAD/exp/student",
         help="""The experiment dir.
         It specifies the directory where all training related
         files, e.g., checkpoints, log, etc, are saved
@@ -842,23 +842,6 @@ def extract_codebook_indexes(batch, params):
 
     return ci, ci_len
 
-def select_teacher_weight(tea_weight_opt):
-    if tea_weight_opt == "test-s":
-        weight = torch.tensor([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
-    elif tea_weight_opt == "test-m":
-        weight = torch.tensor([[0.0, 1.0, 0.0], [0.0, 1.0, 0.0]])
-    elif tea_weight_opt == "test-l":
-        weight = torch.tensor([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]])
-    elif tea_weight_opt == "ease":
-        weight = torch.tensor([[0.5, 0.3, 0.2], [0.5, 0.3, 0.2]])
-    elif tea_weight_opt == "avg":
-        weight_value = 1.0 / 3
-        weight = torch.full((2, 3), weight_value)
-    # elif tea_weight_opt == "confidence":
-    #     weight = [0.5 * teacher_weights[:, batch_idx], 0.5 * teacher_weights[:, batch_idx]]
-
-    return weight
-
 
 def compute_loss(
     params: AttributeDict,
@@ -866,7 +849,7 @@ def compute_loss(
     graph_compiler: CharCtcTrainingGraphCompiler,
     batch: dict,
     is_training: bool,
-    teacher_weights_layers: List[List[float]] = [[0.5, 0.3, 0.2], [0.5, 0.3, 0.2]],
+    # teacher_weights_layers: List[List[float]] = [[0.5, 0.3, 0.2], [0.5, 0.3, 0.2]],
     # teacher_weights_layers: Tensor = torch.tensor([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]])   #only zipformer-s
 ) -> Tuple[Tensor, MetricsTracker, List[float]]:
     """
@@ -921,7 +904,7 @@ def compute_loss(
             am_scale=params.am_scale,
             lm_scale=params.lm_scale,
             codebook_indexes=codebook_indexes,
-            teacher_weights_layers=teacher_weights_layers,
+            # teacher_weights_layers=teacher_weights_layers,
             time_warp_factor = -1,
         )
         # add codebook_loss
@@ -974,7 +957,7 @@ def compute_validation_loss(
 ) -> MetricsTracker:
     """Run the validation process."""
     model.eval()
-    print("start compute validation loss")
+
     tot_loss = MetricsTracker()
 
     for batch_idx, batch in enumerate(valid_dl):
@@ -1091,7 +1074,7 @@ def train_one_epoch(
                     batch=batch,
                     is_training=True,
                     # teacher_weights_layers=[0.5 * teacher_weights[:, batch_idx], 0.5 * teacher_weights[:, batch_idx]],     # 1/(teachers - 1) = 0.5
-                    teacher_weights_layers=select_teacher_weight(params.tea_weight_opt),
+                    # teacher_weights_layers=select_teacher_weight(params.tea_weight_opt, teacher_weights, batch_idx),
                 )
 
             # summary stats

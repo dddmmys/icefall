@@ -169,16 +169,11 @@ class AsrModel(nn.Module):
             print ("start multiple layer distillation ... ")
             assert len(self.middle_output_layers) > 1 and self.middle_output_layers is not None, self.middle_output_layers
             if self.uncertainty_loss:
-              self.awl = AutomaticWeightedLoss(2)  # codebook_loss1, codebook_loss2, simple_loss, pruned_rnnt_loss, 
+              self.awl = AutomaticWeightedLoss(2)  # codebook_loss1, codebook_loss2 ...
             # if self.momentum:
             #   self.mwl = MomentumWeightedLoss()
             self.is_multilayer_distill = True
             for middle_output_layer_n, num_codebook in zip(self.middle_output_layers, self.num_codebooks):
-            # for i, (middle_output_layer_n, num_codebook) in enumerate(zip(self.middle_output_layers, self.num_codebooks)):
-            #     if i == 0:  # 跳过第一次循环
-            #         continue
-            #     if i == 1:
-            #       print("start mvq single layer ...")
                 codebook_loss_net = JointCodebookLoss(
                     predictor_channels = (self.encoder.encoder_dim[0] if middle_output_layer_n == 0 else self.encoder.encoder_dim[middle_output_layer_n - 1] if 1 <= middle_output_layer_n <= 6 else self.encoder.encoder_dim[-1]),
                     num_codebooks=num_codebook,
@@ -423,7 +418,7 @@ class AsrModel(nn.Module):
         supervision_segments: Optional[torch.Tensor] = None,
         time_warp_factor: Optional[int] = 80,
         codebook_indexes: List[torch.Tensor] = None,
-        teacher_weights_layers: List[List[float]] = [[0.5, 0.3, 0.2], [0.5, 0.3, 0.2]],
+        # teacher_weights_layers: List[List[float]] = [[0.5, 0.3, 0.2], [0.5, 0.3, 0.2]],
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, List[torch.Tensor], List[float], torch.Tensor]:
         """
         Args:
@@ -578,11 +573,7 @@ class AsrModel(nn.Module):
             codebook_indexes.append(group1)
             codebook_indexes.append(group2)
           if len(codebook_indexes) == 2:
-            # post_middle_output_layers = [self.middle_output_layers[1]] if len(self.middle_output_layers) > 1 else []
-            # post_codebook_indexes = [codebook_indexes[1]] if len(codebook_indexes) > 1 else []
-            # post_teacher_weights_layers = [teacher_weights_layers[1]] if len(teacher_weights_layers) > 1 else []
-            for middle_output_layer, codebook_loss_net, codebook_index, teacher_weights in zip(self.middle_output_layers, self.codebook_loss_nets, codebook_indexes, teacher_weights_layers):
-            # for middle_output_layer, codebook_loss_net, codebook_index, teacher_weights in zip(post_middle_output_layers, self.codebook_loss_nets, post_codebook_indexes, post_teacher_weights_layers):
+            for middle_output_layer, codebook_loss_net, codebook_index in zip(self.middle_output_layers, self.codebook_loss_nets, codebook_indexes):
               if middle_output_layer  is not  None  and  middle_output_layer < 7:
                 assert isinstance(middle_output_layer, int), f"middle_output_layer type :  {type(middle_output_layer).__name__}"
                 middle_layer_output = middle_layer_outputs[middle_output_layer]
@@ -597,19 +588,16 @@ class AsrModel(nn.Module):
                   if codebook_index.shape[-2] != middle_layer_output.shape[-2]:
                     print("batch_size of student not match teacher")
                     sys.exit(1)
-                  codebook_loss = codebook_loss_net(
-                      middle_layer_output, codebook_index, teacher_weights
-                  )
+                  codebook_loss = codebook_loss_net(middle_layer_output, codebook_index[1])
+                  total_losses.append(codebook_loss)
                   assert self.average_loss != self.uncertainty_loss,f"self.average_loss is {self.average_loss}  self.uncertainty_loss is {self.uncertainty_loss}"
                   if self.average_loss:
+                    # unuse
                     codebook_loss_sum += codebook_loss / len(self.middle_output_layers)
-                    # codebook_loss_sum += codebook_loss
                   if self.uncertainty_loss:
-                    total_losses.append(codebook_loss)
                     if len(total_losses) == len(self.middle_output_layers):
                       total_losses, weights = self.awl(total_losses, self.uncertainty_opt) # uncertainty weight
-                      assert len(total_losses) == len(weights) == 2, f"total_losses lengh is {len(total_losses)}         weights lengh is {len(weights)}"
-                      sigma_values = [w.item() for w in weights]
+                      sigma_values = [f"{w.item():.4f}" for w in weights]
                       print(f"uncertainty sigma is : {sigma_values}")
                       for loss, weight  in zip(total_losses, weights):
                         codebook_loss_sum += loss
