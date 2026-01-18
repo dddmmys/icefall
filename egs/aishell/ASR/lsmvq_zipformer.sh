@@ -165,7 +165,7 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
     --spec-aug-time-warp-factor -1 \
     --max-duration 300 \
     --world-size ${WORLD_SIZE} \
-    --num-epochs 60 \
+    --num-epochs 50 \
     --start-epoch 1 \
     --save-every-n 100000 \
     --exp-dir $exp_dir/student/xs_full_dataset/lsmvq-ml \
